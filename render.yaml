@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: qbe-policy-mock
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: API_KEY
+        value: qbe-demo

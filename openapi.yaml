@@ -1,0 +1,145 @@
+openapi: 3.0.3
+info:
+  title: QBE training mock - Guidewire PolicyCenter and Duck Creek Policy
+  version: 1.0.0
+  description: >
+    Illustrative mock APIs for Pega training. Paths and payloads are simplified and are not the vendors' official APIs.
+    All calls except /, /health and /openapi.yaml need header X-API-Key. Optional headers: Idempotency-Key (bind/issue),
+    X-Mock-Scenario (timeout | validation | unavailable) to simulate errors.
+servers:
+  - url: https://YOUR-APP.onrender.com
+components:
+  securitySchemes:
+    apiKey: { type: apiKey, in: header, name: X-API-Key }
+  schemas:
+    Money: { type: object, properties: { amount: { type: number }, currency: { type: string } } }
+    GwSubmissionRequest:
+      type: object
+      required: [insured]
+      properties:
+        pegaCaseId: { type: string, example: UW-1001 }
+        accountNumber: { type: string, example: ACC-SYD-002 }
+        insured: { type: object, properties: { name: { type: string, example: Harbour Tower Holdings Pty Ltd }, abn: { type: string } } }
+        product: { type: string, example: TerrorismSabotage }
+        jurisdiction: { type: string, example: AU }
+        periodStart: { type: string, format: date, example: '2027-01-01' }
+        periodEnd: { type: string, format: date, example: '2027-12-31' }
+        sumInsured: { $ref: '#/components/schemas/Money' }
+        sharePercent: { type: number, example: 15 }
+        role: { type: string, example: Lead }
+    GwBindRequest:
+      type: object
+      properties: { pegaDecisionId: { type: string, example: DEC-1001-01 } }
+    DcQuoteRequest:
+      type: object
+      required: [insuredName]
+      properties:
+        externalReference: { type: string, example: UW-2001 }
+        insuredId: { type: string, example: INS-LON-002 }
+        insuredName: { type: string, example: Thames Office Estates Ltd }
+        lineOfBusiness: { type: string, example: TERRORISM }
+        territory: { type: string, example: GB }
+        effectiveDate: { type: string, format: date, example: '2027-03-01' }
+        expirationDate: { type: string, format: date, example: '2028-02-28' }
+        totalInsuredValue: { type: number, example: 900000000 }
+        currencyCode: { type: string, example: GBP }
+        participationPct: { type: number, example: 10 }
+        participationRole: { type: string, example: FOLLOW }
+    DcIssueRequest:
+      type: object
+      properties: { approvedDecisionRef: { type: string, example: DEC-2001-01 } }
+    Error: { type: object, properties: { error: { type: string }, message: { type: string } } }
+security: [ { apiKey: [] } ]
+paths:
+  /health:
+    get: { summary: Health check, security: [], responses: { '200': { description: OK } } }
+  /guidewire/pc/rest/job/v1/submissions:
+    post:
+      tags: [Guidewire]
+      summary: Create submission
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GwSubmissionRequest' } } } }
+      responses: { '201': { description: Created }, '422': { description: Validation error } }
+  /guidewire/pc/rest/job/v1/submissions/{submissionId}:
+    get:
+      tags: [Guidewire]
+      summary: Get submission
+      parameters: [ { name: submissionId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /guidewire/pc/rest/job/v1/submissions/{submissionId}/quote:
+    post:
+      tags: [Guidewire]
+      summary: Rate and quote submission
+      parameters: [ { name: submissionId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Quoted }, '404': { description: Not found }, '409': { description: Already bound } }
+  /guidewire/pc/rest/job/v1/submissions/{submissionId}/bind:
+    post:
+      tags: [Guidewire]
+      summary: Bind submission (requires pegaDecisionId)
+      parameters:
+        - { name: submissionId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/GwBindRequest' } } } }
+      responses: { '201': { description: Bound, returns policyNumber }, '403': { description: No approved decision }, '409': { description: Already bound }, '422': { description: Not quoted } }
+  /guidewire/pc/rest/policy/v1/policies:
+    get:
+      tags: [Guidewire]
+      summary: Find policies by account
+      parameters: [ { name: accountNumber, in: query, required: false, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /guidewire/pc/rest/policy/v1/policies/{policyNumber}:
+    get:
+      tags: [Guidewire]
+      summary: Get policy
+      parameters: [ { name: policyNumber, in: path, required: true, schema: { type: string, example: GW-POL-100001 } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /guidewire/pc/rest/policy/v1/policies/{policyNumber}/claims:
+    get:
+      tags: [Guidewire]
+      summary: Get claims (loss history) for a policy
+      parameters: [ { name: policyNumber, in: path, required: true, schema: { type: string, example: GW-POL-100001 } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /duckcreek/policy/api/v1/quotes:
+    post:
+      tags: [DuckCreek]
+      summary: Create quote
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DcQuoteRequest' } } } }
+      responses: { '201': { description: Created }, '422': { description: Validation error } }
+  /duckcreek/policy/api/v1/quotes/{quoteId}:
+    get:
+      tags: [DuckCreek]
+      summary: Get quote
+      parameters: [ { name: quoteId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /duckcreek/policy/api/v1/quotes/{quoteId}/rate:
+    post:
+      tags: [DuckCreek]
+      summary: Rate quote
+      parameters: [ { name: quoteId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Rated }, '404': { description: Not found }, '409': { description: Already issued } }
+  /duckcreek/policy/api/v1/quotes/{quoteId}/issue:
+    post:
+      tags: [DuckCreek]
+      summary: Issue policy (requires approvedDecisionRef)
+      parameters:
+        - { name: quoteId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/DcIssueRequest' } } } }
+      responses: { '201': { description: Issued, returns policyId }, '403': { description: No approved decision }, '409': { description: Already issued }, '422': { description: Not rated } }
+  /duckcreek/policy/api/v1/policies:
+    get:
+      tags: [DuckCreek]
+      summary: Find policies by insured
+      parameters: [ { name: insuredId, in: query, required: false, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /duckcreek/policy/api/v1/policies/{policyId}:
+    get:
+      tags: [DuckCreek]
+      summary: Get policy
+      parameters: [ { name: policyId, in: path, required: true, schema: { type: string, example: DC-POL-200001 } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /duckcreek/policy/api/v1/policies/{policyId}/claims:
+    get:
+      tags: [DuckCreek]
+      summary: Get claims (loss history) for a policy
+      parameters: [ { name: policyId, in: path, required: true, schema: { type: string, example: DC-POL-200001 } } ]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
